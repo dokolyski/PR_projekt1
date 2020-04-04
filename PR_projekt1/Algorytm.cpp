@@ -3,10 +3,13 @@
 #include <cstdio>
 #include <cmath>
 
-
 void printResult(std::vector<int> result) {
+	printf("znaleziono %d liczb pierwszych w zadanym przedziale", result.size());
 	for (int i = 0; i < result.size(); i++) {
-		printf("%d\n", result[i]);
+		if (i % 10 == 0) {
+			printf("\n");
+		}
+		printf("%d ", result[i]);
 	}
 }
 
@@ -56,13 +59,15 @@ std::vector<int> seqByEratostenes(int min, int max) {
 	int maxFactor = floor(std::sqrt(max));
 	std::vector<int> factors = getFactorsFromEratostenes(maxFactor); //wyznaczenie pierwiastków
 	for (int i = 0; i < factors.size(); i++) {
+		// wyznaczenie
 		int j;
 		if (min % factors[i]) {
-			j = min + factors[i] - (min % factors[i]);
+			j = min + factors[i] - min % factors[i];
 		}
 		else {
 			j = min;
 		}
+
 		for (j; j <= max; j += factors[i]) {
 			isComposite[j - min] = true;
 		}
@@ -77,6 +82,7 @@ std::vector<int> seqByEratostenes(int min, int max) {
 			primes.push_back(i);
 		}
 	}
+	delete[] isComposite;
 	return primes;
 }
 
@@ -104,9 +110,59 @@ std::vector<int> seqByEratostenesWithoutFactors(int min, int max) {
 			primes.push_back(i);
 		}
 	}
+	delete[] isComposite;
 	return primes;
 }
 
+std::vector<int> parByEratostenes(int min, int max) { // procesy dziel¹ siê potencjalnymi dzielnikami
+	std::vector<int> primes;
+	bool** isCompositeArray = new bool* [omp_get_num_threads()]; // tablice do "wykreœlania"
+	int maxFactor = floor(std::sqrt(max));
+	std::vector<int> factors = getFactorsFromEratostenes(maxFactor); // wyznaczenie pierwiastków
+	#pragma omp parallel
+	{
+		// ka¿dy proces pracuje na w³asnej tablicy
+		int thread_num = omp_get_thread_num();
+		isCompositeArray[thread_num] = new bool[max - min + 1]();
+		#pragma omp for
+		for (int i = 0; i < factors.size(); i++) {
+			int j;
+			if (min % factors[i]) {
+				j = min + factors[i] - (min % factors[i]);
+			}
+			else {
+				j = min;
+			}
+			for (j; j <= max; j += factors[i]) {
+				isCompositeArray[thread_num][j - min] = true;
+			}
+		}
+	}
+	for (int i = 0; i < factors.size(); i++) {
+		if (factors[i] >= min) {
+			primes.push_back(factors[i]);
+		}
+	}
+	// zebranie wyników do kupy
+	for (int i = min; i <= max; i++) {
+		for (int j = 1; j < omp_get_num_threads(); j++) {
+			isCompositeArray[0][i - min] |= isCompositeArray[j][i - min];
+		}
+		if (!isCompositeArray[0][i - min]) {
+			primes.push_back(i);
+		}
+	}
+	// zwolnienie pamiêci
+	for (int j = 0; j < omp_get_num_threads(); j++) {
+		delete[] isCompositeArray[j];
+	}
+	delete[] isCompositeArray;
+	return primes;
+}
+
+
+
 int main() {
-	printResult(seqByEratostenes(2, 4));
+	printResult(seqByEratostenes(2, 200));
+	//printResult(parByEratostenes(2, 200));
 }
