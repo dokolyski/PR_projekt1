@@ -154,16 +154,16 @@ std::vector<int> parByEratostenes(int min, int max) {
 
 
 		#pragma omp for
-		for (int pFactor: primeFactors) {
+		for (int i = 0; i < primeFactors.size(); i++) {
 			
-			if (min % pFactor) {
-				primeMultiple = min - min % pFactor + pFactor;
+			if (min % primeFactors[i]) {
+				primeMultiple = min - min % primeFactors[i] + primeFactors[i];
 			} 
 			else {
 				primeMultiple = min;
 			}
 
-			for (int j = primeMultiple; j <= max; j += pFactor) {
+			for (int j = primeMultiple; j <= max; j += primeFactors[i]) {
 				isComposite[thread_num][j - min] = true;
 			}
 		}
