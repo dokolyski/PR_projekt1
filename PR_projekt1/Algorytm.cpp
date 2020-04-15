@@ -185,49 +185,32 @@ std::vector<int> parByEratostenes(int min, int max) {
 }
 
 
-//procesy dziel¹ siê potencjalnymi dzielnikami
-std::vector<int> parByEratostenesWithoutFactors(int min, int max) {
-	std::vector<int> primes;
-	std::vector<std::vector<bool>> isComposite(omp_get_num_threads(), std::vector<bool>(max - min + 1, false)); //tablice do "wykreœlania"
-
-	int maxFactor = floor(std::sqrt(max));
+//procesy szukaj¹ dzielników dla w³asnych zakresów
+std::vector<int> parByEratostenesInRanges(int min, int max) {
+	int range = (max - min) / omp_get_num_threads();
 	
+	std::vector<int> primes;
+	std::vector<std::vector<int>> threadsPrimes(omp_get_num_threads()); //tablice do "wykreœlania"
+
 
 	#pragma omp parallel
 	{
-		// ka¿dy proces pracuje na w³asnej tablicy
+		// ka¿dy proces poszukuje pierwiastków w wyznaczonym dla niego przedziale
 		int thread_num = omp_get_thread_num();
-		int primeMultiple;
 
-		#pragma omp for static
-		for (int i = 2; i <= maxFactor; i++) {
+		int localMin = min + range * thread_num;
+		int localMax = localMin + range;
 
-			if (i >= min && !isComposite[thread_num][i - min]) {
-				primes.push_back(i);
-			}
 
-			if (min % i) {
-				primeMultiple = min - min % i + i;
-			}
-			else {
-				primeMultiple = min;
-			}
-
-			for (int j = primeMultiple; j <= max; j += i) {
-				isComposite[thread_num][j - min] = true;
-			}
-		}
+		int maxFactor = floor(std::sqrt(localMax));
+		std::vector<int> primes = seqByEratostenes(localMin, localMax); // wyznaczenie liczb pierwszych
+		threadsPrimes[thread_num] = primes;
 	}
 
 	// zebranie wyników do kupy
-	for (int i = min; i <= max; i++) {
-
-		for (int j = 1; j < omp_get_num_threads(); j++) {
-			isComposite[0][i - min] = isComposite[0][i - min] | isComposite[j][i - min];
-		}
-
-		if (!isComposite[0][i - min]) {
-			primes.push_back(i);
+	for (int thread = 0; thread < omp_get_num_threads(); thread++) {
+		for (int prime : threadsPrimes[thread]) {
+			primes.push_back(prime);
 		}
 	}
 
@@ -235,5 +218,5 @@ std::vector<int> parByEratostenesWithoutFactors(int min, int max) {
 }
 
 int main() {
-	printResult(seqByEratostenes(2, 200));
+	printResult(parByEratostenesInRanges(2, 200));
 }
