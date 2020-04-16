@@ -77,6 +77,9 @@ std::vector<int> seqByEratostenes(int min, int max) {
 
 	for (int pFactor: primeFactors) {
 		// wyznaczenie
+		if (pFactor >= min) {
+			primes.push_back(pFactor);
+		}
 
 		if (min % pFactor) {
 			pFactorMultiple = min - min % pFactor + pFactor; //dodajemy pFactor aby by³a liczba wiêksza od min oraz wielokrotnoœci¹ pFactor
@@ -86,12 +89,6 @@ std::vector<int> seqByEratostenes(int min, int max) {
 
 		for (int j = pFactorMultiple; j <= max; j += pFactor) { //usuwamy wielokrotnoœci liczb pierwszych w zakresie <min; max>
 			isComposite[j - min] = true;
-		}
-	}
-
-	for (int pFactor: primeFactors) {
-		if (pFactor >= min) {
-			primes.push_back(pFactor);
 		}
 	}
 
@@ -138,7 +135,7 @@ std::vector<int> seqByEratostenesWithoutFactors(int min, int max) {
 	return primes;
 }
 
-//procesy dziel¹ siê potencjalnymi dzielnikami
+//procesy dziel¹ siê potencjalnymi dzielnikami z podzbioru liczb pierwszych
 std::vector<int> parByEratostenes(int min, int max) {
 	std::vector<int> primes;
 	std::vector<std::vector<bool>> isComposite(omp_get_num_threads(), std::vector<bool>(max - min + 1, false)); //tablice do "wykreœlania"
@@ -154,24 +151,21 @@ std::vector<int> parByEratostenes(int min, int max) {
 
 
 		#pragma omp for
-		for (int pFactor: primeFactors) {
-			
-			if (min % pFactor) {
-				primeMultiple = min - min % pFactor + pFactor;
+		for (int i = 0; i < primeFactors.size(); i++) {
+			if (primeFactors[i] >= min) {
+				primes.push_back(primeFactors[i]);
+			}
+
+			if (min % primeFactors[i]) {
+				primeMultiple = min - min % primeFactors[i] + primeFactors[i];
 			} 
 			else {
 				primeMultiple = min;
 			}
 
-			for (int j = primeMultiple; j <= max; j += pFactor) {
+			for (int j = primeMultiple; j <= max; j += primeFactors[i]) {
 				isComposite[thread_num][j - min] = true;
 			}
-		}
-	}
-
-	for (int pFactor: primeFactors) {
-		if (pFactor >= min) {
-			primes.push_back(pFactor);
 		}
 	}
 
@@ -191,8 +185,38 @@ std::vector<int> parByEratostenes(int min, int max) {
 }
 
 
+//procesy szukaj¹ dzielników dla w³asnych zakresów
+std::vector<int> parByEratostenesInRanges(int min, int max) {
+	int range = (max - min) / omp_get_num_threads();
+	
+	std::vector<int> primes;
+	std::vector<std::vector<int>> threadsPrimes(omp_get_num_threads()); //tablice do "wykreœlania"
+
+
+	#pragma omp parallel
+	{
+		// ka¿dy proces poszukuje pierwiastków w wyznaczonym dla niego przedziale
+		int thread_num = omp_get_thread_num();
+
+		int localMin = min + range * thread_num;
+		int localMax = localMin + range;
+
+
+		int maxFactor = floor(std::sqrt(localMax));
+		std::vector<int> primes = seqByEratostenes(localMin, localMax); // wyznaczenie liczb pierwszych
+		threadsPrimes[thread_num] = primes;
+	}
+
+	// zebranie wyników do kupy
+	for (int thread = 0; thread < omp_get_num_threads(); thread++) {
+		for (int prime : threadsPrimes[thread]) {
+			primes.push_back(prime);
+		}
+	}
+
+	return primes;
+}
 
 int main() {
-	printResult(seqByEratostenes(2, 200));
-	//printResult(parByEratostenes(2, 200));
+	printResult(parByEratostenesInRanges(2, 200));
 }
