@@ -284,7 +284,7 @@ std::vector<int> parByEratostenesCommonPrimesSet(int min, int max) {
 }
 
 int main() {
-	const int MIN = 2, MAX = 200;
+	const int MAX = 200;
 
 	auto func = { 
 		seqByDivide,
@@ -295,10 +295,42 @@ int main() {
 		parByEratostenesCommonPrimesSet
 	};
 
-	for (int i = 0; i < func.size(); i++) {
-		auto pack = measureTime(*std::next(func.begin(), i), MIN, MAX);
-		std::cout << "Function " << "[" << i << "]" << std::endl << "Time: " << pack.first << std::endl;
-		printResult(pack.second);
-		std::cout << std::endl << std::endl;
+	const auto test = [&func](int start, int stop) {
+		std::vector<std::vector<int>> results(func.size);
+		for (int i = 0; i < func.size(); i++) {
+			auto pack = measureTime(*std::next(func.begin(), i), start, stop);
+			std::cout 
+				<< "<" << start << " , " << stop << "> " 
+				<< "Function " << "[" << i << "]" << std::endl 
+				<< "Time: " << pack.first << std::endl;
+			
+			printResult(pack.second);
+			std::cout << std::endl << std::endl;
+			results[i] = pack.second;
+		}
+
+		return results;
+	};
+
+	/*
+	const int SEQUENTIAL = 1;
+	const int PARALLEL_MAX_LOGIC_THREADS = 4;
+	const int PARALLEL_MAX_PHYSICAL_THREADS = 4;
+	const int PARALLEL_HALF_PHYSICAL_THREADS = 2;
+
+	omp_set_num_threads(SEQUENTIAL);
+	if (PARALLEL_MAX_PHYSICAL_THREADS != PARALLEL_MAX_LOGIC_THREADS) {
+		omp_set_num_threads(PARALLEL_MAX_PHYSICAL_THREADS);
 	}
+	
+	if (PARALLEL_HALF_PHYSICAL_THREADS != SEQUENTIAL &&
+		PARALLEL_HALF_PHYSICAL_THREADS != PARALLEL_MAX_LOGIC_THREADS &&
+		PARALLEL_HALF_PHYSICAL_THREADS != PARALLEL_MAX_PHYSICAL_THREADS) {
+		omp_set_num_threads(PARALLEL_HALF_PHYSICAL_THREADS);
+	}
+	*/
+
+	test(2, MAX);
+	test(MAX / 2, MAX);
+	test(2, MAX / 2);
 }
