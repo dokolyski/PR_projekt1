@@ -4,6 +4,21 @@
 #include <cmath>
 #include <iostream>
 #include <algorithm>
+#include <utility>
+#include <chrono>
+
+using Time = double;
+template<typename Func, typename ... Vargs>
+auto measureTime(Func f, Vargs ... args) -> std::pair<Time, std::vector<int>> {
+	using namespace std;
+
+	auto startTimePoint = chrono::high_resolution_clock::now();
+	auto results = f(args...);
+	auto endTimePoint = chrono::high_resolution_clock::now();
+
+	auto time = chrono::duration_cast<chrono::duration<double>>(endTimePoint - startTimePoint);
+	return std::pair< Time, decltype(results)>(time.count(), results);
+}
 
 void printResult(std::vector<int> primes) {
 	std::cout << "znaleziono " << primes.size() << " liczb pierwszych w zadanym przedziale" << std::endl;
@@ -184,10 +199,9 @@ std::vector<int> parByEratostenes(int min, int max) {
 	return primes;
 }
 
-
 //procesy szukaj¹ dzielników dla w³asnych zakresów
 std::vector<int> parByEratostenesInRanges(int min, int max) {
-	int range = (max - min) / omp_get_num_threads();
+	int range = (max - min + 1) / omp_get_num_threads();
 	
 	std::vector<int> primes;
 	std::vector<std::vector<int>> threadsPrimes(omp_get_num_threads()); //tablice do "wykreœlania"
@@ -199,7 +213,7 @@ std::vector<int> parByEratostenesInRanges(int min, int max) {
 		int thread_num = omp_get_thread_num();
 
 		int localMin = min + range * thread_num;
-		int localMax = localMin + range;
+		int localMax = localMin + range - 1;
 
 
 		int maxFactor = floor(std::sqrt(localMax));
@@ -216,6 +230,7 @@ std::vector<int> parByEratostenesInRanges(int min, int max) {
 
 	return primes;
 }
+
 
 //procesy szukaj¹ dzielników dla w³asnych zakresów
 std::vector<int> parByEratostenesInRangesViaFor(int min, int max) {
@@ -257,6 +272,105 @@ std::vector<int> parByEratostenesInRangesViaFor(int min, int max) {
 	return primes;
 }
 
+//procesy szukaj¹ dzielników dla w³asnych zakresów, wspolny zbior pierwiastkow
+std::vector<int> parByEratostenesCommonPrimesSet(int min, int max) {
+	using Range = std::pair<int, int>;
+
+	std::vector<int> primes;
+	std::vector<std::vector<int>> threadsPrimes(omp_get_num_threads()); //tablice do "wykreœlania"
+
+	std::vector<int> commonPrimes = getPrimeFactorsFromEratostenes(max); // wyznaczenie pierwiastków
+
+	std::vector<Range> subranges(pow(omp_get_num_threads(), 2));
+	int range = (max - min + 1) / omp_get_num_threads();
+
+	//wyznaczanie podprzedzia³ów
+	for (int thread = 0; thread < omp_get_num_threads(); thread++) {
+		int localMin = min + range * thread;
+		int localMax = localMin + range - 1;
+
+		int subRange = (localMax - localMin + 1) / omp_get_num_threads();
+
+		for (int i = 0; i < omp_get_num_threads(); i++) {
+			int subRangeLocalMin = localMin + subRange * i;
+			int subRangeLocalMax = localMin + subRange - 1;
+			
+			subranges[thread * omp_get_num_threads() + i] = Range(subRangeLocalMin, subRangeLocalMax);
+		}
+	}
+
+
+	#pragma omp parallel
+	{	
+		std::vector<int> primes;
+
+		// ka¿dy proces poszukuje pierwiastków w wyznaczonym dla niego przedziale
+		#pragma omp for dynamic
+		for (int i = 0; i < subranges.size(); i++) {
+			auto localPrimes = seqByEratostenes(subranges[i].first, subranges[i].second);
+			primes.insert(primes.end(), localPrimes.begin(), localPrimes.end());
+		}
+		
+		threadsPrimes[omp_get_thread_num()] = primes;
+	}
+
+	// zebranie wyników do kupy
+	for (int thread = 0; thread < omp_get_num_threads(); thread++) {
+		for (int prime : threadsPrimes[thread]) {
+			primes.push_back(prime);
+		}
+	}
+	return primes;
+}
+
 int main() {
-	printResult(parByEratostenesInRangesViaFor(2, 200));
+	const int MAX = 200;
+
+	auto func = { 
+		seqByDivide,
+		seqByEratostenes,
+		seqByEratostenesWithoutFactors,
+		parByEratostenes,
+		parByEratostenesInRanges,
+		parByEratostenesCommonPrimesSet
+	};
+
+	const auto test = [&func](int start, int stop) {
+		std::vector<std::vector<int>> results(func.size);
+		for (int i = 0; i < func.size(); i++) {
+			auto pack = measureTime(*std::next(func.begin(), i), start, stop);
+			std::cout 
+				<< "<" << start << " , " << stop << "> " 
+				<< "Function " << "[" << i << "]" << std::endl 
+				<< "Time: " << pack.first << std::endl;
+			
+			printResult(pack.second);
+			std::cout << std::endl << std::endl;
+			results[i] = pack.second;
+		}
+
+		return results;
+	};
+
+	/*
+	const int SEQUENTIAL = 1;
+	const int PARALLEL_MAX_LOGIC_THREADS = 4;
+	const int PARALLEL_MAX_PHYSICAL_THREADS = 4;
+	const int PARALLEL_HALF_PHYSICAL_THREADS = 2;
+
+	omp_set_num_threads(SEQUENTIAL);
+	if (PARALLEL_MAX_PHYSICAL_THREADS != PARALLEL_MAX_LOGIC_THREADS) {
+		omp_set_num_threads(PARALLEL_MAX_PHYSICAL_THREADS);
+	}
+	
+	if (PARALLEL_HALF_PHYSICAL_THREADS != SEQUENTIAL &&
+		PARALLEL_HALF_PHYSICAL_THREADS != PARALLEL_MAX_LOGIC_THREADS &&
+		PARALLEL_HALF_PHYSICAL_THREADS != PARALLEL_MAX_PHYSICAL_THREADS) {
+		omp_set_num_threads(PARALLEL_HALF_PHYSICAL_THREADS);
+	}
+	*/
+
+	test(2, MAX);
+	test(MAX / 2, MAX);
+	test(2, MAX / 2);
 }
