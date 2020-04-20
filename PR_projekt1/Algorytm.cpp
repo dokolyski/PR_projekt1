@@ -217,6 +217,46 @@ std::vector<int> parByEratostenesInRanges(int min, int max) {
 	return primes;
 }
 
+//procesy szukaj¹ dzielników dla w³asnych zakresów
+std::vector<int> parByEratostenesInRangesViaFor(int min, int max) {
+	std::vector<int> primes;
+	std::vector<bool> isComposite(max + 1, false); //tablice do "wykreœlania"
+	int maxFactor = floor(std::sqrt(max));
+	std::vector<int> primeFactors = getPrimeFactorsFromEratostenes(maxFactor); // wyznaczenie pierwiastków
+
+#pragma omp parallel num_threads(4)
+	{
+		std::cout << omp_get_thread_num()<<std::endl;
+		for (int i = 0; i < primeFactors.size(); i++) {
+			if ((primeFactors[i] >= min) && (omp_get_thread_num() == 0)) {
+				primes.push_back(primeFactors[i]);
+			}
+
+			int primeMultiple;
+			bool start = true;
+			int fakePrimeFactors = 1;
+			#pragma omp for
+			for (int j = min; j <= max; j += fakePrimeFactors) {
+				if (start) {
+					if(j % primeFactors[i] != 0) {
+						continue;
+					}
+					start = false;
+					fakePrimeFactors = primeFactors[i];
+				}
+				isComposite[j] = true;
+			}
+		}
+
+		for (int i = min; i <= max; i++) {
+			if (!isComposite[i]) {
+				primes.push_back(i);
+			}
+		}
+	}
+	return primes;
+}
+
 int main() {
-	printResult(parByEratostenesInRanges(2, 200));
+	printResult(parByEratostenesInRangesViaFor(2, 200));
 }
