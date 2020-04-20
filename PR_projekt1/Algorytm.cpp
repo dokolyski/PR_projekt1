@@ -21,8 +21,6 @@ auto measureTime(Func f, Vargs ... args) -> std::pair<Time, std::vector<int>> {
 }
 
 void printResult(std::vector<int> primes) {
-	std::cout << "znaleziono " << primes.size() << " liczb pierwszych w zadanym przedziale" << std::endl;
-	
 	for (int i = 0; i < primes.size(); i++) {
 		std::cout << primes[i] << " ";
 		if (i > 0 && i % 10 == 0) {
@@ -211,10 +209,7 @@ std::vector<int> parByEratostenesInRanges(int min, int max, int thread_num) {
 		int thread_num = omp_get_thread_num();
 
 		int localMin = min + range * thread_num;
-		int localMax = localMin + range - 1;
-		if (thread_num == omp_get_num_threads() - 1) {
-			localMax = max;
-		}
+		int localMax = (thread_num == omp_get_num_threads() - 1) ? max : localMin + range - 1;
 
 		int maxFactor = floor(std::sqrt(localMax));
 		std::vector<int> primes = seqByEratostenes(localMin, localMax, NULL); // wyznaczenie liczb pierwszych
@@ -287,20 +282,14 @@ std::vector<int> parByEratostenesCommonPrimesSet(int min, int max, int thread_nu
 	//wyznaczanie podprzedzia³ów
 	for (int thread = 0; thread < thread_num; thread++) {
 		int localMin = min + range * thread;
-		int localMax = localMin + range - 1;
-		if (thread == thread_num - 1) {
-			localMax = max;
-		}
+		int localMax = (thread == thread_num - 1) ? max : localMin + range - 1;
 
 		int subRange = (localMax - localMin + 1) / thread_num;
 
 		for (int i = 0; i < thread_num; i++) {
 			int subRangeLocalMin = localMin + subRange * i;
-			int subRangeLocalMax = subRangeLocalMin + subRange - 1;
-			if (thread == thread_num - 1) {
-				subRangeLocalMax = localMax;
-			}
-			std::cout << "min: " << subRangeLocalMin << " max: " << subRangeLocalMax << std::endl;
+			int subRangeLocalMax = (i == thread_num - 1) ? localMax : subRangeLocalMin + subRange - 1;
+			
 			subranges[thread * thread_num + i] = Range(subRangeLocalMin, subRangeLocalMax);
 		}
 	}
@@ -328,15 +317,17 @@ std::vector<int> parByEratostenesCommonPrimesSet(int min, int max, int thread_nu
 	return primes;
 }
 
+//#define DEBUG
+
 int main() {
-	const int MAX = 200;
+	const int MAX = 1000000;
 
 	auto func = { 
-		//seqByDivide,
-		//seqByEratostenes,
-		//seqByEratostenesWithoutFactors,
-		//parByEratostenes,
-		//parByEratostenesInRanges,
+		seqByDivide,
+		seqByEratostenes,
+		seqByEratostenesWithoutFactors,
+		parByEratostenes,
+		parByEratostenesInRanges,
 		parByEratostenesCommonPrimesSet
 	};
 
@@ -350,7 +341,12 @@ int main() {
 				<< "Threads " << "[" << num << "]" << std::endl
 				<< "Time: " << pack.first << std::endl;
 			
+			std::cout << "Znaleziono " << pack.second.size() << " liczb pierwszych w zadanym przedziale" << std::endl;
+
+			#ifdef DEBUG
 			printResult(pack.second);
+			#endif // !DEBUG
+
 			std::cout << std::endl << std::endl;
 			results[i] = pack.second;
 		}
