@@ -150,48 +150,52 @@ std::vector<int> seqByEratostenesWithoutFactors(int min, int max, int thread_num
 //procesy dziel¹ siê potencjalnymi dzielnikami z podzbioru liczb pierwszych
 std::vector<int> parByEratostenes(int min, int max, int thread_num) {
 	std::vector<int> primes;
-	std::vector<std::vector<bool>> isComposite(thread_num, std::vector<bool>(max - min + 1, false)); //tablice do "wykreœlania"
 	
 	int maxFactor = floor(std::sqrt(max));
 	std::vector<int> primeFactors = getPrimeFactorsFromEratostenes(maxFactor); // wyznaczenie pierwiastków
-	
+
+	int alfa = min;
+	if (maxFactor >= min) {
+		alfa = maxFactor + 1;
+	}
+
+	std::vector<std::vector<bool>> isComposite(thread_num, std::vector<bool>(max - alfa + 1, false)); //tablice do "wykreœlania"
+
 	#pragma omp parallel num_threads(thread_num)
 	{
 		// ka¿dy proces pracuje na w³asnej tablicy
-		int thread_num = omp_get_thread_num();
+		int current_thread = omp_get_thread_num();
 		int primeMultiple;
 
 		#pragma omp for
 		for (int i = 0; i < primeFactors.size(); i++) {
-			if (primeFactors[i] >= min) {
-				primes.push_back(primeFactors[i]);
-			}
-
-			if (min % primeFactors[i]) {
-				primeMultiple = min - min % primeFactors[i] + primeFactors[i];
+			if (alfa % primeFactors[i]) {
+				primeMultiple = alfa - alfa % primeFactors[i] + primeFactors[i];
 			} 
 			else {
-				primeMultiple = min;
+				primeMultiple = alfa;
 			}
 
 			for (int j = primeMultiple; j <= max; j += primeFactors[i]) {
-				isComposite[thread_num][j - min] = true;
+				isComposite[current_thread][j - alfa] = true;
 			}
 		}
 	}
 
 	// zebranie wyników do kupy
-	for (int i = min; i <= max; i++) {
-		
+	primes.reserve(primeFactors.size());
+	primes.insert(primes.end(), primeFactors.begin(), primeFactors.end());
+
+	for (int i = alfa; i <= max; i++) {
 		for (int j = 1; j < thread_num; j++) {
-			isComposite[0][i - min] = isComposite[0][i - min] | isComposite[j][i - min];
+			isComposite[0][i - alfa] = isComposite[0][i - alfa] | isComposite[j][i - alfa];
 		}
 
-		if (!isComposite[0][i - min]) {
+		if (!isComposite[0][i - alfa]) {
 			primes.push_back(i);
 		}
 	}
-	
+
 	return primes;
 }
 
@@ -228,44 +232,50 @@ std::vector<int> parByEratostenesInRanges(int min, int max, int thread_num) {
 
 
 //procesy szukaj¹ dzielników dla w³asnych zakresów
-//std::vector<int> parByEratostenesInRangesViaFor(int min, int max,  int thread_num) {
-//	std::vector<int> primes;
-//	std::vector<bool> isComposite(max + 1, false); //tablice do "wykreœlania"
-//	int maxFactor = floor(std::sqrt(max));
-//	std::vector<int> primeFactors = getPrimeFactorsFromEratostenes(maxFactor); // wyznaczenie pierwiastków
-//
-//#pragma omp parallel num_threads(thread_num)
-//	{
-//		std::cout << omp_get_thread_num()<<std::endl;
-//		for (int i = 0; i < primeFactors.size(); i++) {
-//			if ((primeFactors[i] >= min) && (omp_get_thread_num() == 0)) {
-//				primes.push_back(primeFactors[i]);
-//			}
-//
-//			int primeMultiple;
-//			bool start = true;
-//			int fakePrimeFactors = 1;
-//			#pragma omp for
-//			for (int j = min; j <= max; j += fakePrimeFactors) {
-//				if (start) {
-//					if(j % primeFactors[i] != 0) {
-//						continue;
-//					}
-//					start = false;
-//					fakePrimeFactors = primeFactors[i];
-//				}
-//				isComposite[j] = true;
-//			}
-//		}
-//
-//		for (int i = min; i <= max; i++) {
-//			if (!isComposite[i]) {
-//				primes.push_back(i);
-//			}
-//		}
-//	}
-//	return primes;
-//}
+std::vector<int> parByEratostenesInRangesViaFor(int min, int max,  int thread_num) {
+	std::vector<int> primes;
+	int maxFactor = floor(std::sqrt(max));
+	std::vector<int> primeFactors = getPrimeFactorsFromEratostenes(maxFactor); // wyznaczenie pierwiastków
+	int alfa = min;
+	if (maxFactor >= min) {
+		alfa = maxFactor + 1;
+	}
+	std::vector<std::vector<bool>> isComposite(thread_num, std::vector<bool>(max - alfa + 1, false)); //tablice do "wykreœlania"
+
+#pragma omp parallel num_threads(thread_num)
+	{
+		int primeMultiple;
+		int currentThread = omp_get_thread_num();
+		for (int i = 0; i < primeFactors.size(); i++) {
+			if (alfa % primeFactors[i]) {
+				primeMultiple = alfa - alfa % primeFactors[i] + primeFactors[i];
+			}
+			else {
+				primeMultiple = alfa;
+			}
+
+			#pragma omp for
+			for (int j = primeMultiple; j <= max; j += primeFactors[i]) {
+				isComposite[currentThread][j - alfa] = true;
+			}
+		}
+	}
+
+	// zebranie wyników do kupy
+	primes.reserve(primeFactors.size());
+	primes.insert(primes.end(), primeFactors.begin(), primeFactors.end());
+
+	for (int i = alfa; i <= max; i++) {
+		for (int j = 1; j < thread_num; j++) {
+			isComposite[0][i - alfa] = isComposite[0][i - alfa] | isComposite[j][i - alfa];
+		}
+
+		if (!isComposite[0][i - alfa]) {
+			primes.push_back(i);
+		}
+	}
+	return primes;
+}
 
 //procesy szukaj¹ dzielników dla w³asnych zakresów, wspolny zbior pierwiastkow
 std::vector<int> parByEratostenesCommonPrimesSet(int min, int max, int thread_num) {
@@ -317,8 +327,6 @@ std::vector<int> parByEratostenesCommonPrimesSet(int min, int max, int thread_nu
 	return primes;
 }
 
-//#define DEBUG
-
 int main() {
 	const int MAX = 1000000;
 
@@ -328,7 +336,8 @@ int main() {
 		seqByEratostenesWithoutFactors,
 		parByEratostenes,
 		parByEratostenesInRanges,
-		parByEratostenesCommonPrimesSet
+		parByEratostenesCommonPrimesSet,
+		parByEratostenesInRangesViaFor
 	};
 
 	const auto test = [&func](int start, int stop, int num) {
@@ -343,9 +352,7 @@ int main() {
 			
 			std::cout << "Znaleziono " << pack.second.size() << " liczb pierwszych w zadanym przedziale" << std::endl;
 
-			#ifdef DEBUG
-			printResult(pack.second);
-			#endif // !DEBUG
+			//printResult(pack.second);
 
 			std::cout << std::endl << std::endl;
 			results[i] = pack.second;
